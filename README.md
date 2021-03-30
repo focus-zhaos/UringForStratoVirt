@@ -4,12 +4,16 @@
 基于stratovirt的后端块设备，实现对异步读写组件iouring的支持
 
 #### 项目目录树
-util
-- aio
-- - libaio.rs
-- - mod.rs
-- - raw.rs
-- - uring.rs
+
+```
+├── aio
+│   ├── libaio.rs
+│   ├── mod.rs
+│   ├── raw.rs
+│   └── uring.rs
+├── ...
+```
+
 
 #### 安装教程
 
