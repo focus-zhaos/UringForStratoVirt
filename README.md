@@ -2,6 +2,7 @@
 
 #### 介绍
 基于stratovirt的后端虚拟块设备，实现对异步读写组件iouring的支持。
+
 1. 基于crate libc，封装425-427号系统调用与相关iouring的数据结构、宏定义与枚举类型。
 2. 实现异步上下文结构体UringContext, 其成员函数分别实现setup(), enter()和register()功能，具体来说：
     - 构造函数new()：调用sys_io_uring_setup()初始化iouring，注册eventfd，并完成sq,cq,sqe三段内存的映射，构造异步上下文UringContext。
