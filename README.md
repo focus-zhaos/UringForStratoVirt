@@ -27,7 +27,7 @@ util/src
 3.  xxxx
 
 #### 使用说明
-本项目基于stratovirt开发，编译与运行方式同原生系统，详见[openEuler / stratovirt](https://gitee.com/openeuler/stratovirt?_from=gitee_search)
-
+本项目基于stratovirt开发，编译与运行方式同原生系统，详见[openEuler / stratovirt](https://gitee.com/openeuler/stratovirt)
+代码基于kernel 5.5，libc "0.2.71"版本撰写。
 #### 作者简历
 TOPIC_ID:14, TEAM_ID:1996338335, TEAM_NAME:NBJL挤牙膏大师.
