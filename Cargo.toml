@@ -22,6 +22,7 @@ members = [
     "boot_loader",
     "util",
     "device_model",
+    "sample_program",
 ]
 
 [[bin]]

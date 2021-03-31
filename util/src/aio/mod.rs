@@ -28,7 +28,7 @@ use super::errors::Result;
 use super::link_list::{List, Node};
 pub use libaio::*;
 pub use raw::*;
-pub use uring::{UringCmd, UringCb, UringContext};
+pub use uring::{UringCmd, UringCb, UringContext, SampleContext};
 
 type CbList<T> = List<AioCb<T>>;
 type CbNode<T> = Node<AioCb<T>>;

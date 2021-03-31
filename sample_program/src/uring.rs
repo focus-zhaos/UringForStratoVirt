@@ -1,14 +1,11 @@
 // 2020 openEuler Developer Contest - Question 17
 // Author' email: zhaos@nbjl.nankai.edu.cn
 
-
-use super::Result;
 use libc::*;
 use std::mem::size_of;
-use vmm_sys_util::eventfd::EventFd;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
-
+use std::io::Result;
 pub const __NR_IO_URING_SETUP: i64 = 425;
 pub const __NR_IO_URING_ENTER: i64 = 426;
 pub const __NR_IO_URING_REGISTER: i64 =427;
@@ -104,20 +101,6 @@ pub struct Iovec {
     pub iov_len: u64,
 }
 
-#[repr(C)]
-#[allow(non_camel_case_types)]
-#[derive(Default)]
-pub struct UringCb {
-    pub data: u64,
-    pub key: u32,
-    pub aio_reserved1: u32,
-    pub aio_lio_opcode: u8,
-    pub aio_reqprio: u16,
-    pub aio_fildes: i32,
-    pub aio_buf: u64,
-    pub aio_nbytes: u32,
-    pub aio_offset: u64,
-}
 
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -131,167 +114,6 @@ pub enum UringCmd {
     IORING_OP_WRITE_FIXED = 5,
 }
 
-#[repr(C)]
-#[allow(non_camel_case_types)]
-#[derive(Default)]
-pub struct IoEvent {
-    pub data: u64,
-    pub obj: u64,
-    pub res: i64,
-    pub res2: i64,
-}
-
-pub struct EventResult {
-    pub events: Vec<IoEvent>,
-    pub nr: usize,
-}
-
-pub struct UringContext {
-    pub ring_fd: i32,
-    pub sq_tail: *mut u32,
-    pub sq_mask: *mut u32,
-    pub sq_arr: *mut u32,
-    pub sqes: *mut IoUringSqe,
-    pub cq_head: *mut u32,
-    pub cq_tail: *mut u32,
-    pub cq_mask: *mut u32,
-    pub cqes: *mut IoUringCqe,
-}
-
-impl UringContext {
-    pub fn new(max_size: i32, fd: &EventFd) -> Result<Self> {
-        let mut p: IoUringParams = Default::default();
-        let ret = unsafe { syscall(__NR_IO_URING_SETUP, max_size, &mut p) as i32};
-
-        unsafe{ syscall(__NR_IO_URING_REGISTER, ret, IORING_REGISTER_EVENTFD, fd, 1) };
-
-        let sq_size = (p.sq_off.array as usize) + (p.sq_entries as usize) * size_of::<u32>();
-        let cq_size = (p.cq_off.cqes as usize) + (p.cq_entries as usize) * size_of::<IoUringCqe>();
-
-        /*
-        // In kernel version 5.4 and above
-        if p.features & IORING_FEAT_SINGLE_MMAP {
-            if  cq_size > sq_size {
-                sq_size = cq_size;
-            }
-            cq_size = sq_size;
-        }
-        */
-        unsafe {
-            let mut sq_ptr = mmap (
-                std::ptr::null_mut(),
-                sq_size,
-                PROT_READ | PROT_WRITE, 
-                MAP_SHARED | MAP_POPULATE,
-                ret,
-                IORING_OFF_SQ_RING as i64
-            );
-    
-            let mut cq_ptr = mmap (
-                std::ptr::null_mut(),
-                cq_size,
-                PROT_READ | PROT_WRITE, 
-                MAP_SHARED | MAP_POPULATE,
-                ret,
-                IORING_OFF_CQ_RING as i64
-            );
-    
-            let mut sqe_ptr = mmap (
-                std::ptr::null_mut(),
-                (p.sq_entries as usize) * size_of::<IoUringSqe>(),
-                PROT_READ | PROT_WRITE, 
-                MAP_SHARED | MAP_POPULATE,
-                ret,
-                IORING_OFF_SQES as i64
-            ) as *mut IoUringSqe;
-    
-            
-            let mut sq_tail = (sq_ptr as *mut u8).add(p.sq_off.tail as usize) as *mut u32;
-            let mut sq_mask = (sq_ptr as *mut u8).add(p.sq_off.ring_mask as usize) as *mut u32;
-            let mut sq_arr = (sq_ptr as *mut u8).add(p.sq_off.array as usize) as *mut u32;
-            let mut cq_head = (cq_ptr as *mut u8).add(p.cq_off.head as usize) as *mut u32;
-            let mut cq_tail = (cq_ptr as *mut u8).add(p.cq_off.tail as usize) as *mut u32;
-            let mut cq_mask = (cq_ptr as *mut u8).add(p.cq_off.ring_mask as usize) as *mut u32;
-            let mut cqes = (cq_ptr as *mut u8).add(p.cq_off.cqes as usize) as *mut IoUringCqe;
-        
-            Ok(UringContext {
-                ring_fd: ret,
-                sq_tail,
-                sq_mask,
-                sq_arr,
-                sqes: sqe_ptr,
-                cq_head,
-                cq_tail,
-                cq_mask,
-                cqes,
-            })
-        }
-    }
-
-    pub fn submit(&self, nr: i64, iocbp: &mut Vec<*mut UringCb>) -> Result<()> {
-        unsafe {
-            let mut tail = *(self.sq_tail);
-            for urcb in (*iocbp).iter() {
-                let index = tail & *(self.sq_mask);
-                let mut sqe = self.sqes.add(index as usize);
-                (*sqe).fd = (*(*urcb)).aio_fildes;
-                (*sqe).opcode = (*(*urcb)).aio_lio_opcode;
-                (*sqe).addr = (*(*urcb)).aio_buf;
-                (*sqe).len = (*(*urcb)).aio_nbytes;
-                (*sqe).off = (*(*urcb)).aio_offset;
-                (*sqe).user_data = (*(*urcb)).data;
-                *(self.sq_arr.add(index as usize)) = index;
-                tail = tail + 1;
-
-                if *(self.sq_tail) != tail {
-                    *(self.sq_tail) = tail;
-                }
-            }
-
-            syscall(__NR_IO_URING_ENTER, 
-                self.ring_fd,
-                1,
-                1,
-                IORING_ENTER_GETEVENTS,
-                std::ptr::null_mut() as *mut c_void,
-                0
-            );
-        }
-
-        Ok(())
-        
-    }
-
-    pub fn get_buffs(&self) -> Result<EventResult> {
-        let mut events: Vec<IoEvent> = Vec::new();
-        unsafe {
-            let mut head = *(self.cq_head);
-            
-            while head != *(self.cq_tail) {
-                // get the entry from cq_head
-                let mut cqe = self.cqes.add((head & *(self.cq_mask)) as usize);
-                events.push( IoEvent {
-                    data: (*cqe).user_data,
-                    obj: 0,
-                    res: 0,
-                    res2: (*cqe).res as i64,
-                });
-                head = head + 1;
-            }
-
-            *(self.cq_head) = head;
-        }
-        let nr = events.len();
-        Ok(EventResult {
-            events,
-            nr,
-        })
-
-    }
-
-
-    
-}
 
 pub struct SampleContext {
     pub ring_fd: i32,
@@ -374,13 +196,13 @@ impl SampleContext {
         }
     }
     // 示例程序提交函数，读取路径为pathstr的文件，注文件大小不超过512字节
-    pub fn submit(&self, pathstr: String) -> Result<()> {
-        let mut f = File::open(pathstr)?;
+    pub fn submit(&self, pathstr: String) {
+        let mut f = File::open(pathstr).unwrap();
         let fd: RawFd = f.as_raw_fd();
-        let mut buf: [char; 512] = ['\0'; 512];
+        let mut buf: [c_char; 512] = [0; 512];
 
         let mut iov = Iovec {
-            iov_base: (&mut buf as *mut [char; 512]) as u64,
+            iov_base: (&mut buf as *mut [c_char; 512]) as u64,
             iov_len: 512,
         };
 
@@ -411,14 +233,20 @@ impl SampleContext {
             );
         }
 
-        Ok(())
         
     }
 
-    pub fn read_from_cq(&self) -> Result<()> {
+    pub fn read_from_cq(&self) {
         unsafe {
             let mut head = *(self.cq_head);
-            
+            let mut cqe = self.cqes.add((head & *(self.cq_mask)) as usize);
+            let mut res_iov = (*cqe).user_data as *mut Iovec;
+            let mut res_buf = (*res_iov).iov_base as *mut c_char;
+            for i in 0..100 {
+                print!("{}", *(res_buf));
+                res_buf = res_buf.add(1);
+            }
+            /*
             while head != *(self.cq_tail) {
                 // get the entry from cq_head
                 let mut cqe = self.cqes.add((head & *(self.cq_mask)) as usize);
@@ -430,9 +258,9 @@ impl SampleContext {
                 }
                 head = head + 1;
             }
+            */
 
             *(self.cq_head) = head;
         }
-        Ok(())
     }
 }
