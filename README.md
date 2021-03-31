@@ -5,7 +5,7 @@
 
 1. 基于crate libc，封装425-427号系统调用与相关iouring的数据结构、宏定义与枚举类型。
 
-2. 实现异步上下文结构体UringContext, 其成员函数分别实现setup(), enter()和register()功能，具体来说：
+2. 实现异步上下文结构体UringContext(util/src/aio/uring.rs), 其成员函数分别实现setup(), enter()和register()功能，具体来说：
     - 构造函数new()：调用sys_io_uring_setup()初始化iouring，注册eventfd，并完成sq,cq,sqe三段内存的映射，构造异步上下文UringContext。
     - 请求提交submit(): 接收Iocb相关参数(file_fd, iovec, offset等)，构造并向sqe尾部(tail)添加请求，调用sys_io_uring_enter()提交。 
     - 获取结果get_events(): 由handle调用，从cq_head开始读取cqes的返回数据(user_data, res)，打包成EventResult结构返回。
