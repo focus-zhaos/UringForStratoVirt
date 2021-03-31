@@ -10,6 +10,9 @@
 // NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 
+// 2020 openEuler Developer Contest - Question 17
+// Author' email: zhaos@nbjl.nankai.edu.cn
+
 use std::cmp;
 use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
@@ -23,7 +26,7 @@ use std::sync::{Arc, Mutex};
 
 use address_space::{AddressSpace, GuestAddress};
 use machine_manager::config::{ConfigCheck, DriveConfig};
-use util::aio::{Aio, AioCb, AioCompleteFunc, IoCmd, Iovec};
+use util::aio::{Aio, AioCb, AioCompleteFunc, IoCmd, Iovec, UringCmd};
 use util::byte_code::ByteCode;
 use util::epoll_context::{
     read_fd, EventNotifier, EventNotifierHelper, NotifierCallback, NotifierOperation,
@@ -287,7 +290,7 @@ impl Request {
         let mut aiocb = AioCb {
             last_aio,
             file_fd: disk.as_raw_fd(),
-            opcode: IoCmd::NOOP,
+            opcode: UringCmd::IORING_OP_NOP,
             iovec: Vec::new(),
             offset: (self.out_header.sector << SECTOR_SHIFT) as usize,
             process: true,
@@ -304,8 +307,8 @@ impl Request {
         }
 
         match self.out_header.request_type {
-            VIRTIO_BLK_T_IN => {
-                aiocb.opcode = IoCmd::PREADV;
+            VIRTIO_BLK_T_IN => { 
+                aiocb.opcode = UringCmd::IORING_OP_READV;
                 if direct {
                     (*aio).as_mut().rw_aio(aiocb)?;
                 } else {
@@ -313,7 +316,7 @@ impl Request {
                 }
             }
             VIRTIO_BLK_T_OUT => {
-                aiocb.opcode = IoCmd::PWRITEV;
+                aiocb.opcode = UringCmd::IORING_OP_WRITEV;
                 if direct {
                     (*aio).as_mut().rw_aio(aiocb)?;
                 } else {
@@ -321,7 +324,7 @@ impl Request {
                 }
             }
             VIRTIO_BLK_T_FLUSH => {
-                aiocb.opcode = IoCmd::FDSYNC;
+                aiocb.opcode = UringCmd::IORING_OP_FSYNC;
                 (*aio).as_mut().rw_sync(aiocb)?;
             }
             VIRTIO_BLK_T_GET_ID => {

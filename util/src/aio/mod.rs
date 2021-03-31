@@ -10,8 +10,12 @@
 // NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 
+// 2020 openEuler Developer Contest - Question 17
+// Author' email: zhaos@nbjl.nankai.edu.cn
+
 mod libaio;
 mod raw;
+mod uring;
 
 use std::clone::Clone;
 use std::marker::{Send, Sync};
@@ -24,6 +28,7 @@ use super::errors::Result;
 use super::link_list::{List, Node};
 pub use libaio::*;
 pub use raw::*;
+pub use uring::{UringCmd, UringCb, UringContext};
 
 type CbList<T> = List<AioCb<T>>;
 type CbNode<T> = Node<AioCb<T>>;
@@ -33,11 +38,11 @@ pub type AioCompleteFunc<T> = Box<dyn Fn(&AioCb<T>, i64) + Sync + Send>;
 pub struct AioCb<T: Clone> {
     pub last_aio: bool,
     pub file_fd: RawFd,
-    pub opcode: IoCmd,
+    pub opcode: UringCmd,
     pub iovec: Vec<Iovec>,
     pub offset: usize,
     pub process: bool,
-    pub iocb: Option<std::ptr::NonNull<IoCb>>,
+    pub iocb: Option<std::ptr::NonNull<UringCb>>,
     pub iocompletecb: T,
 }
 
@@ -46,7 +51,7 @@ impl<T: Clone> AioCb<T> {
         AioCb {
             last_aio: true,
             file_fd: 0,
-            opcode: IoCmd::NOOP,
+            opcode: UringCmd::IORING_OP_NOP,
             iovec: Vec::new(),
             offset: 0,
             process: false,
@@ -57,7 +62,7 @@ impl<T: Clone> AioCb<T> {
 }
 
 pub struct Aio<T: Clone + 'static> {
-    pub ctx: Arc<LibaioContext>,
+    pub ctx: Arc<uring::UringContext>,
     pub fd: EventFd,
     pub aio_in_queue: CbList<T>,
     pub aio_in_flight: CbList<T>,
@@ -68,10 +73,11 @@ pub struct Aio<T: Clone + 'static> {
 impl<T: Clone + 'static> Aio<T> {
     pub fn new(func: Arc<AioCompleteFunc<T>>) -> Result<Self> {
         let max_events = 128;
+        let fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
 
         Ok(Aio {
-            ctx: Arc::new(LibaioContext::new(max_events as i32)?),
-            fd: EventFd::new(libc::EFD_NONBLOCK).unwrap(),
+            ctx: Arc::new(uring::UringContext::new(max_events as i32, &fd)?),
+            fd,
             aio_in_queue: List::new(),
             aio_in_flight: List::new(),
             max_events,
@@ -80,7 +86,7 @@ impl<T: Clone + 'static> Aio<T> {
     }
 
     pub fn handle(&mut self) -> Result<()> {
-        let evts = self.ctx.get_events()?;
+        let evts = self.ctx.get_buffs()?;
         for e in evts.events.iter().take(evts.nr) {
             if e.res2 == 0 {
                 unsafe {
@@ -132,14 +138,12 @@ impl<T: Clone + 'static> Aio<T> {
         let offset = cb.offset;
 
         let mut node = Box::new(Node::new(cb));
-        let iocb = IoCb {
-            aio_lio_opcode: opcode as u16,
-            aio_fildes: file_fd as u32,
+        let iocb = UringCb {
+            aio_lio_opcode: opcode as u8,
+            aio_fildes: file_fd as i32,
             aio_buf: iovec,
-            aio_nbytes: sg_size as u64,
+            aio_nbytes: sg_size as u32,
             aio_offset: offset as u64,
-            aio_flags: IOCB_FLAG_RESFD,
-            aio_resfd: self.fd.as_raw_fd() as u32,
             data: (&mut (*node) as *mut CbNode<T>) as u64,
             ..Default::default()
         };
@@ -155,7 +159,7 @@ impl<T: Clone + 'static> Aio<T> {
 
     pub fn rw_sync(&mut self, cb: AioCb<T>) -> Result<()> {
         let ret = match cb.opcode {
-            IoCmd::PREADV => {
+            UringCmd::IORING_OP_READV => {
                 let mut r = 0;
                 let mut off = cb.offset;
                 for iov in cb.iovec.iter() {
@@ -164,7 +168,7 @@ impl<T: Clone + 'static> Aio<T> {
                 }
                 r
             }
-            IoCmd::PWRITEV => {
+            UringCmd::IORING_OP_WRITEV => {
                 let mut r = 0;
                 let mut off = cb.offset;
                 for iov in cb.iovec.iter() {
@@ -173,7 +177,7 @@ impl<T: Clone + 'static> Aio<T> {
                 }
                 r
             }
-            IoCmd::FDSYNC => raw_datasync(cb.file_fd)?,
+            UringCmd::IORING_OP_FSYNC => raw_datasync(cb.file_fd)?,
             _ => -1,
         };
         (self.complete_func)(&cb, ret);
