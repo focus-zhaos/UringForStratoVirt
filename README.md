@@ -1,4 +1,4 @@
-# 14-NBJL挤牙膏大师
+# StratoVirt的virtio-block设备后端支持配置io_uring
 
 #### 介绍
 基于stratovirt的后端虚拟块设备，实现对异步读写组件iouring的支持。
