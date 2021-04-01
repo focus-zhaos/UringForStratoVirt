@@ -8,6 +8,7 @@ use std::mem::size_of;
 use vmm_sys_util::eventfd::EventFd;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::ffi::CString;
 
 pub const __NR_IO_URING_SETUP: i64 = 425;
 pub const __NR_IO_URING_ENTER: i64 = 426;
@@ -374,13 +375,14 @@ impl SampleContext {
         }
     }
     // 示例程序提交函数，读取路径为pathstr的文件，注文件大小不超过512字节
-    pub fn submit(&self, pathstr: String) -> Result<()> {
-        let mut f = File::open(pathstr)?;
-        let fd: RawFd = f.as_raw_fd();
-        let mut buf: [char; 512] = ['\0'; 512];
+    pub fn submit(&self, c_path: *mut c_char) {
+    
+        let fd = unsafe { open(c_path as *const c_char, O_RDONLY) };
+        
+        let mut buf: [i8; 512] = [0; 512];
 
         let mut iov = Iovec {
-            iov_base: (&mut buf as *mut [char; 512]) as u64,
+            iov_base: (&mut buf as *mut [i8; 512]) as u64,
             iov_len: 512,
         };
 
@@ -411,14 +413,29 @@ impl SampleContext {
             );
         }
 
-        Ok(())
         
     }
 
-    pub fn read_from_cq(&self) -> Result<()> {
+    pub fn read_from_cq(&self) {
         unsafe {
             let mut head = *(self.cq_head);
-            
+            let mut cqe = self.cqes.add((head & *(self.cq_mask)) as usize);
+            let mut res_iov = (*cqe).user_data as *mut Iovec;
+            let mut res_buf = *((*res_iov).iov_base as *mut [u8; 512]);
+            let mut i = 0;
+            print!("[Sample Result]: ");
+            while res_buf[i] != 0 {
+                print!("{}", res_buf[i] as char);
+                i = i+1;
+            }
+            println!();
+            //let string = String::from_raw_parts(res_buf as *mut u8, 100, 100);
+            //println!("[Sample ans:] {}", c_string.into_string().expect("into_string() call failed"));
+            head = head + 1;
+            //for i in 0..100 {
+                //print!("{}", res_buf[i]);
+            //}
+            /*
             while head != *(self.cq_tail) {
                 // get the entry from cq_head
                 let mut cqe = self.cqes.add((head & *(self.cq_mask)) as usize);
@@ -430,9 +447,10 @@ impl SampleContext {
                 }
                 head = head + 1;
             }
+            */
 
             *(self.cq_head) = head;
         }
-        Ok(())
+        
     }
 }

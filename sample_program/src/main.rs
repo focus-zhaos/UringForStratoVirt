@@ -1,11 +1,14 @@
 // 2020 openEuler Developer Contest - Question 17
 // Author' email: zhaos@nbjl.nankai.edu.cn
+
 extern crate libc;
-pub mod uring;
-use uring::*;
+use util::aio::*;
+use std::ffi::{CString, CStr};
 
 fn main() {
     let urctx: SampleContext = SampleContext::new(1);
-    urctx.submit("/home/zs/stratovirt/sample_program/src/testFile.txt".to_string());
+    let pathstr = CString::new("src/testFile.txt").unwrap();
+    let c_path = pathstr.into_raw();
+    urctx.submit(c_path);
     urctx.read_from_cq();
 }

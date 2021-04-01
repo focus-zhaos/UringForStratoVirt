@@ -225,6 +225,7 @@ name = "sample_program_Q17"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "util",
 ]
 
 [[package]]
