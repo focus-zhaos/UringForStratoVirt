@@ -1,4 +1,4 @@
-// 2020 openEuler Developer Contest - Question 17
+// 2020 openEuler Developer Contest - Question 14
 // Author' email: zhaos@nbjl.nankai.edu.cn
 
 extern crate libc;

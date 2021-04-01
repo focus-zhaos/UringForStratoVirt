@@ -10,7 +10,7 @@
 // NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 
-// 2020 openEuler Developer Contest - Question 17
+// 2020 openEuler Developer Contest - Question 14
 // Author' email: zhaos@nbjl.nankai.edu.cn
 
 use std::cmp;
