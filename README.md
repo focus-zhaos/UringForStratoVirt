@@ -12,30 +12,35 @@
 
 3. 按需修改部分mod.rs和block.rs文件中代码逻辑。
 4. sample_program内为示例代码的实现。
+
 #### 项目目录树
 
 ```
 util/src
 ├── aio
-│   ├── libaio.rs
 │   ├── mod.rs
-│   ├── raw.rs
 │   └── uring.rs
-├── ...
-```
+device_model/src
+├── virtio
+│   └── block.rs
+sample_program/src
+├── main.rs
+├── testFile.txt
 
+```
 
 #### 执行原理
 
 
-#### 使用说明
-代码基于kernel 5.5，libc "0.2.71"版本撰写。编译与运行方式同原生系统，详见[openEuler / stratovirt](https://gitee.com/openeuler/stratovirt)
+#### 说明
+代码基于kernel 5.3，libc "0.2.71"版本撰写。虚拟机编译与运行方式同原生系统，详见[stratovirt](https://gitee.com/openeuler/stratovirt)
+
 
 #### 可用性测试
-1. 示例代码（stratovirt/sample_program）：示例代码使用iouring读取一个小于512字节的文件（测试文件位于stratovirt/sample_program/src/testFile.txt）。
+1. 示例代码（stratovirt/sample_program）：示例代码使用iouring读取一个小于512字节的文件（测试文件位于stratovirt/sample_program/src/testFile.txt）。您可以通过修改testFile.txt文件来输入测试数据。
 
 ```
-[zs@localhost sample_program]$ cargo run
+[zs@localhost sample_program]$ cargo build & cargo run
     Finished dev [unoptimized + debuginfo] target(s) in 0.00s
      Running `target/debug/sample_program_Q17`
 [Sample Result]: 2020 openEuler Contest - Q17
