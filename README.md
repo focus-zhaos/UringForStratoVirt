@@ -1,4 +1,4 @@
-# StratoVirt的virtio-block设备后端支持配置io_uring
+# rust-iouring for StratoVirt
 
 #### 介绍
 基于stratovirt的后端虚拟块设备，实现对异步读写组件iouring的支持。
@@ -30,7 +30,7 @@ sample_program/src
 ```
 
 #### 执行原理
-
+![UringForStratovirt执行原理](https://images.gitee.com/uploads/images/2021/0402/120249_bd29ee3c_8342032.png "Untitled Diagram (1).png")
 
 #### 说明
 代码基于kernel 5.3，libc "0.2.71"版本撰写。虚拟机编译与运行方式同原生系统，详见[stratovirt](https://gitee.com/openeuler/stratovirt)
@@ -48,8 +48,6 @@ sample_program/src
 
 
 #### 作者简历
-TOPIC_ID:14, TEAM_ID:1996338335, TEAM_NAME:NBJL挤牙膏大师.
-
-队长&成员：赵盛，南开大学计算机学院。
+赵盛，南开大学计算机学院。
 
 技术栈：QEMU设备虚拟化，Linux内存管理。
